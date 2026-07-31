@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum AutomationStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum SenderType {
+  CUSTOMER
+  AUTOMATION
+  HUMAN
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum AutomationEventStatus {
+  SUCCESS
+  FAILED
+  RUNNING
+  SKIPPED_HUMAN_TAKEOVER
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  takeoversPerformed Contact[]  @relation("TakeoverBy")
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model Contact {
+  id                String           @id @default(uuid())
+  phone             String           @unique
+  name              String?
+  automationStatus  AutomationStatus @default(ACTIVE) @map("automation_status")
+  takeoverById      String?          @map("takeover_by")
+  takeoverBy        User?            @relation("TakeoverBy", fields: [takeoverById], references: [id])
+  takeoverAt        DateTime?        @map("takeover_at")
+  resumedAt         DateTime?        @map("resumed_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  conversation      Conversation?
+  automationEvents  AutomationEvent[]
+  auditLogs         AuditLog[]
+
+  @@index([automationStatus])
+  @@map("contacts")
+}
+
+model Conversation {
+  id             String             @id @default(uuid())
+  contactId      String             @unique @map("contact_id")
+  contact        Contact            @relation(fields: [contactId], references: [id])
+  status         ConversationStatus @default(OPEN)
+  lastMessageAt  DateTime?          @map("last_message_at")
+  unreadCount    Int                @default(0) @map("unread_count")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  messages       Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id                String            @id @default(uuid())
+  conversationId    String            @map("conversation_id")
+  conversation      Conversation      @relation(fields: [conversationId], references: [id])
+  providerMessageId String            @unique @map("provider_message_id")
+  direction         MessageDirection
+  senderType        SenderType        @map("sender_type")
+  messageType       MessageType       @map("message_type")
+  content           String?
+  mediaUrl          String?           @map("media_url")
+  status            MessageStatus     @default(PENDING)
+  sentAt            DateTime?         @map("sent_at")
+  deliveredAt       DateTime?         @map("delivered_at")
+  readAt            DateTime?         @map("read_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  automationEvents  AutomationEvent[]
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model AutomationEvent {
+  id            String                @id @default(uuid())
+  contactId     String                @map("contact_id")
+  contact       Contact               @relation(fields: [contactId], references: [id])
+  messageId     String?               @map("message_id")
+  message       Message?              @relation(fields: [messageId], references: [id])
+  workflowName  String                @map("workflow_name")
+  executionId   String                @map("execution_id")
+  status        AutomationEventStatus
+  errorMessage  String?               @map("error_message")
+  startedAt     DateTime?             @map("started_at")
+  completedAt   DateTime?             @map("completed_at")
+
+  @@index([contactId, startedAt])
+  @@map("automation_events")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  contactId String?  @map("contact_id")
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([contactId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
