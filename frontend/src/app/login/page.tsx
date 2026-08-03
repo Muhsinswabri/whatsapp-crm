@@ -1,96 +1,123 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { ApiError } from '@/lib/api';
+import { useEffect, useState } from 'react';
 
-export default function LoginPage() {
-  const { user, loading, login } = useAuth();
-  const router = useRouter();
+type DashboardStatus = {
+  whatsapp: {
+    connected: boolean;
+    phone: string | null;
+    session: string | null;
+  };
+  n8n: {
+    online: boolean;
+  };
+  activeAutomations: number;
+  humanTakeovers: number;
+  messagesToday: number;
+  failedAutomations: number;
+};
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+const API =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://whatsapp-crm-faev.onrender.com/api';
+
+const EMPTY: DashboardStatus = {
+  whatsapp: {
+    connected: false,
+    phone: null,
+    session: null,
+  },
+  n8n: {
+    online: false,
+  },
+  activeAutomations: 0,
+  humanTakeovers: 0,
+  messagesToday: 0,
+  failedAutomations: 0,
+};
+
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardStatus>(EMPTY);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && user) {
-      router.replace('/dashboard');
-    }
-  }, [loading, user, router]);
+    async function load() {
+      try {
+        const res = await fetch(`${API}/dashboard/status`, {
+          credentials: 'include',
+        });
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await login(email, password);
-      router.replace('/dashboard');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Something went wrong. Please try again.');
+        if (!res.ok) {
+          console.error('Dashboard API:', res.status);
+          setData(EMPTY);
+          return;
+        }
+
+        const json = await res.json();
+        setData(json);
+      } catch (err) {
+        console.error(err);
+        setData(EMPTY);
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setSubmitting(false);
     }
+
+    load();
+  }, []);
+
+  if (loading) {
+    return <div className="p-6">Loading...</div>;
   }
 
+  const cards = [
+    {
+      title: 'WhatsApp Connection',
+      value: data.whatsapp.connected
+        ? `🟢 Connected (${data.whatsapp.phone ?? ''})`
+        : '🔴 Disconnected',
+    },
+    {
+      title: 'n8n Status',
+      value: data.n8n.online ? '🟢 Online' : '🔴 Offline',
+    },
+    {
+      title: 'Active Automations',
+      value: data.activeAutomations,
+    },
+    {
+      title: 'Human Takeovers',
+      value: data.humanTakeovers,
+    },
+    {
+      title: 'Messages Today',
+      value: data.messagesToday,
+    },
+    {
+      title: 'Failed Automations',
+      value: data.failedAutomations,
+    },
+  ];
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-gray-900">Control Center</h1>
-        <p className="mb-6 text-sm text-gray-500">Sign in to monitor and manage automation.</p>
+    <div>
+      <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder="you@company.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-status-error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card) => (
+          <div
+            key={card.title}
+            className="rounded-xl border bg-white p-5 shadow"
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+            <div className="text-sm text-gray-500">
+              {card.title}
+            </div>
+
+            <div className="mt-3 text-xl font-semibold">
+              {card.value}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
