@@ -1,21 +1,86 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+type DashboardStatus = {
+  whatsapp: {
+    connected: boolean;
+    phone: string | null;
+    session: string | null;
+  };
+  n8n: {
+    online: boolean;
+  };
+  activeAutomations: number;
+  humanTakeovers: number;
+  messagesToday: number;
+  failedAutomations: number;
+};
+
+const API = process.env.NEXT_PUBLIC_API_URL;
+
 export default function DashboardPage() {
+  const [data, setData] = useState<DashboardStatus | null>(null);
+
+  useEffect(() => {
+    fetch(`${API}/dashboard/status`, {
+      credentials: 'include',
+    })
+      .then((r) => r.json())
+      .then(setData)
+      .catch(console.error);
+  }, []);
+
+  if (!data) {
+    return <div className="p-6">Loading...</div>;
+  }
+
+  const cards = [
+    {
+      title: 'WhatsApp Connection',
+      value: data.whatsapp.connected
+        ? `🟢 Connected (${data.whatsapp.phone})`
+        : '🔴 Disconnected',
+    },
+    {
+      title: 'n8n Status',
+      value: data.n8n.online ? '🟢 Online' : '🔴 Offline',
+    },
+    {
+      title: 'Active Automations',
+      value: data.activeAutomations,
+    },
+    {
+      title: 'Human Takeovers',
+      value: data.humanTakeovers,
+    },
+    {
+      title: 'Messages Today',
+      value: data.messagesToday,
+    },
+    {
+      title: 'Failed Automations',
+      value: data.failedAutomations,
+    },
+  ];
+
   return (
     <div>
-      <h1 className="mb-1 text-lg font-semibold text-gray-900">Dashboard</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Operational health overview. Live cards (WhatsApp connection, n8n status, active
-        automations, human takeovers, messages today, failed automations) are wired up in the
-        monitoring stage.
-      </p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {['WhatsApp Connection', 'n8n Status', 'Active Automations', 'Human Takeovers', 'Messages Today', 'Failed Automations'].map(
-          (label) => (
-            <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-              <p className="mt-2 text-2xl font-semibold text-gray-400">—</p>
+      <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cards.map((card) => (
+          <div
+            key={card.title}
+            className="rounded-xl border bg-white p-5 shadow"
+          >
+            <div className="text-sm text-gray-500">{card.title}</div>
+
+            <div className="mt-3 text-xl font-semibold">
+              {card.value}
             </div>
-          ),
-        )}
+          </div>
+        ))}
       </div>
     </div>
   );
