@@ -17,11 +17,9 @@ type DashboardStatus = {
   failedAutomations: number;
 };
 
-const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'https://whatsapp-crm-faev.onrender.com/api';
+const API = process.env.NEXT_PUBLIC_API_URL!;
 
-const EMPTY: DashboardStatus = {
+const DEFAULT_DATA: DashboardStatus = {
   whatsapp: {
     connected: false,
     phone: null,
@@ -37,44 +35,64 @@ const EMPTY: DashboardStatus = {
 };
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardStatus>(EMPTY);
+  const [data, setData] = useState<DashboardStatus>(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function load() {
+    async function loadDashboard() {
       try {
         const res = await fetch(`${API}/dashboard/status`, {
           credentials: 'include',
         });
 
         if (!res.ok) {
-          console.error('Dashboard API:', res.status);
-          setData(EMPTY);
+          console.error(
+            `Dashboard API Error: ${res.status} ${res.statusText}`
+          );
+          setData(DEFAULT_DATA);
           return;
         }
 
         const json = await res.json();
-        setData(json);
+
+        setData({
+          whatsapp: {
+            connected: json?.whatsapp?.connected ?? false,
+            phone: json?.whatsapp?.phone ?? null,
+            session: json?.whatsapp?.session ?? null,
+          },
+          n8n: {
+            online: json?.n8n?.online ?? false,
+          },
+          activeAutomations: json?.activeAutomations ?? 0,
+          humanTakeovers: json?.humanTakeovers ?? 0,
+          messagesToday: json?.messagesToday ?? 0,
+          failedAutomations: json?.failedAutomations ?? 0,
+        });
       } catch (err) {
-        console.error(err);
-        setData(EMPTY);
+        console.error('Dashboard fetch failed:', err);
+        setData(DEFAULT_DATA);
       } finally {
         setLoading(false);
       }
     }
 
-    load();
+    loadDashboard();
   }, []);
 
   if (loading) {
-    return <div className="p-6">Loading...</div>;
+    return (
+      <div className="p-6 text-lg font-medium">
+        Loading dashboard...
+      </div>
+    );
   }
 
   const cards = [
     {
       title: 'WhatsApp Connection',
       value: data.whatsapp.connected
-        ? `🟢 Connected (${data.whatsapp.phone ?? ''})`
+        ? `🟢 Connected (${data.whatsapp.phone ?? 'Unknown'})`
         : '🔴 Disconnected',
     },
     {
@@ -100,14 +118,19 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="mt-2 text-gray-500">
+          Operational health overview.
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <div
             key={card.title}
-            className="rounded-xl border bg-white p-5 shadow"
+            className="rounded-xl border bg-white p-5 shadow-sm"
           >
             <div className="text-sm text-gray-500">
               {card.title}
