@@ -6,11 +6,29 @@ import { LoginDto } from './dto/login.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
-const isProd = process.env.NODE_ENV === 'production';
+// Whether the frontend is served from a different origin/domain than this API
+// (e.g. Vercel frontend + Render backend). In that case the auth cookies MUST
+// be sent with `secure: true; sameSite: 'none'` or the browser will silently
+// refuse to store/send them on cross-site fetch requests, which shows up as
+// every authenticated call (e.g. GET /api/dashboard/status) returning 401
+// even right after a successful login.
+//
+// We don't rely on NODE_ENV alone here because hosting platforms like Render
+// don't always set NODE_ENV=production automatically, and forgetting to set
+// it manually silently breaks cross-site auth. Instead we treat the
+// deployment as cross-site whenever FRONTEND_ORIGIN is an https:// URL (or
+// COOKIE_CROSS_SITE is explicitly set), which is the actual condition that
+// determines whether SameSite=None is required.
+const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+const isCrossSite =
+  process.env.COOKIE_CROSS_SITE === 'true' ||
+  process.env.NODE_ENV === 'production' ||
+  frontendOrigin.startsWith('https://');
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: isProd,
-  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+  secure: isCrossSite,
+  sameSite: (isCrossSite ? 'none' : 'lax') as 'none' | 'lax',
   path: '/',
 };
 
